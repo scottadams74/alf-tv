@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>ALF TV</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+body {
+  font-family: 'Press Start 2P', monospace;
+  background: url('assets/living-room.jpg') no-repeat center top;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ─── TV wrapper: centered in viewport ───────────────────────── */
+#tv-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+}
+
+/* ─── TV container: 800×560, clips overflow ──────────────────── */
+#tv-container {
+  position: relative;
+  width: 800px;
+  height: 560px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* Layer 1 — Off-state screen (always visible) */
+#tv-off-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  z-index: 1;
+  display: block;
+}
+
+/* Layer 2 — Game iframe
+   Offset -29px top so the HUD is hidden above the bezel,
+   full game canvas fills the 560px TV screen exactly. */
+#game-frame {
+  position: absolute;
+  left: 0;
+  top: -29px;
+  width: 800px;
+  height: 650px;
+  border: none;
+  z-index: 2;
+  display: none;
+}
+
+/* Layer 3 — YouTube iframe */
+#yt-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  z-index: 3;
+  display: none;
+}
+
+/* Layer 3b — YouTube branding masks */
+#yt-mask-top,
+#yt-mask-logo {
+  position: absolute;
+  z-index: 4;
+  display: none;
+  pointer-events: none;
+  background: #000;
+}
+/* covers the video title bar across the top */
+#yt-mask-top {
+  top: 0; left: 0; right: 0;
+  height: 40px;
+}
+/* covers the full bottom control bar */
+#yt-mask-logo {
+  bottom: 0; left: 0; right: 0;
+  height: 40px;
+}
+
+/* Layer 4 — CRT scanlines (TV mode only) */
+#crt-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  display: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0px,
+    transparent 3px,
+    rgba(0, 0, 0, 0.13) 3px,
+    rgba(0, 0, 0, 0.13) 4px
+  );
+}
+
+/* Layer 5 — TV on-state bezel overlay (transparent frame on top) */
+#tv-on-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  z-index: 5;
+  pointer-events: none;
+  display: none;
+}
+
+/* Layer 6 — Static channel-change flash */
+#static-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0;
+}
+#static-flash.firing {
+  animation: static-anim 0.45s ease-out forwards;
+}
+@keyframes static-anim {
+  0%   { opacity: 0;   background: #fff; }
+  12%  { opacity: 1;   background: repeating-linear-gradient(0deg,   #fff 0px, #000 1px, #fff 3px, #888 5px); }
+  35%  { opacity: 0.8; background: repeating-linear-gradient(90deg,  #fff 0px, #666 2px, #000 4px); }
+  65%  { opacity: 0.4; background: repeating-linear-gradient(135deg, #fff 0px, #333 3px); }
+  100% { opacity: 0;   background: #fff; }
+}
+
+/* ─── Button panel ───────────────────────────────────────────── */
+#btn-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 179px;
+  height: 560px;
+  flex-shrink: 0;
+  background: linear-gradient(to right, #1a1a1a, #0d0d0d);
+  padding: 0;
+  overflow: hidden;
+}
+
+.tv-btn {
+  display: block;
+  width: 179px;
+  height: 43px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.35;
+  pointer-events: none;
+  transition: filter 0.12s;
+  position: relative;
+}
+.tv-btn img {
+  width: 179px;
+  height: 43px;
+  display: block;
+  object-fit: fill;
+}
+.tv-btn:hover { filter: brightness(1.35); }
+.tv-btn:active { filter: brightness(0.8); }
+
+/* Active channel highlight */
+.tv-btn.active img {
+  filter: drop-shadow(0 0 5px #ff0) brightness(1.3);
+}
+
+/* ─── State classes applied to body ─────────────────────────── */
+
+/* TV on: enable all buttons */
+body.tv-on .tv-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* Power button is always clickable */
+#btn-power {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* Game mode layers */
+body.game-mode #game-frame    { display: block; }
+body.game-mode #yt-frame      { display: none; }
+body.game-mode #crt-overlay   { display: none; }
+body.game-mode #tv-on-overlay { display: block; }
+
+/* TV mode layers */
+body.tv-mode #game-frame    { display: none; }
+body.tv-mode #yt-frame      { display: block; }
+body.tv-mode #yt-mask-top   { display: block; }
+body.tv-mode #yt-mask-logo  { display: block; }
+body.tv-mode #crt-overlay   { display: block; }
+body.tv-mode #tv-on-overlay { display: block; }
+</style>
+</head>
+<body>
+
+<div id="tv-wrapper">
+
+  <!-- ── TV Screen ────────────────────────────────────────────── -->
+  <div id="tv-container">
+
+    <!-- L1: Off-state screen (always on) -->
+    <img id="tv-off-bg" src="assets/tv-frame-off.png" alt="">
+
+    <!-- L2: Game iframe -->
+    <iframe id="game-frame"
+      src="alf-space-invaders.html"
+      scrolling="no"
+      allow="autoplay"
+      title="ALF vs Space Cats">
+    </iframe>
+
+    <!-- L3: YouTube iframe -->
+    <iframe id="yt-frame"
+      src=""
+      scrolling="no"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+      referrerpolicy="strict-origin-when-cross-origin"
+      allowfullscreen
+      title="YouTube video player">
+    </iframe>
+
+    <!-- L3b: YouTube branding masks -->
+    <div id="yt-mask-top"></div>
+    <div id="yt-mask-logo"></div>
+
+    <!-- L4: CRT scanlines -->
+    <div id="crt-overlay"></div>
+
+    <!-- L5: TV bezel on-state overlay -->
+    <img id="tv-on-overlay" src="assets/tv-frame-on.png" alt="">
+
+    <!-- L6: Channel-change static flash -->
+    <div id="static-flash"></div>
+
+  </div><!-- /tv-container -->
+
+  <!-- ── Button Panel ─────────────────────────────────────────── -->
+  <div id="btn-panel">
+
+    <button class="tv-btn" id="btn-power" onclick="togglePower()">
+      <img id="power-img" src="assets/button-power-off.png" alt="Power">
+    </button>
+
+    <button class="tv-btn" id="btn-atari" onclick="switchToGame()">
+      <img src="assets/button-atari.png" alt="Atari Game">
+    </button>
+
+    <button class="tv-btn" id="btn-gameshows" onclick="switchToTV('gameshows', this)">
+      <img src="assets/button-Gameshows.png" alt="Game Shows">
+    </button>
+
+    <button class="tv-btn" id="btn-commercials" onclick="switchToTV('commercials', this)">
+      <img src="assets/button-commercials.png" alt="Commercials">
+    </button>
+
+    <button class="tv-btn" id="btn-cartoons" onclick="switchToTV('cartoons', this)">
+      <img src="assets/button-cartoons.png" alt="Cartoons">
+    </button>
+
+    <button class="tv-btn" id="btn-educational" onclick="switchToTV('educational', this)">
+      <img src="assets/button-educational.png" alt="Educational">
+    </button>
+
+    <button class="tv-btn" id="btn-trashtv" onclick="switchToTV('trashtv', this)">
+      <img src="assets/button-trashtv.png" alt="Trash TV">
+    </button>
+
+    <button class="tv-btn" id="btn-news" onclick="switchToTV('news', this)">
+      <img src="assets/button-news.png" alt="News">
+    </button>
+
+    <button class="tv-btn" id="btn-sports" onclick="switchToTV('sports', this)">
+      <img src="assets/button-sports.png" alt="Sports">
+    </button>
+
+    <button class="tv-btn" id="btn-sitcoms" onclick="switchToTV('sitcoms', this)">
+      <img src="assets/button-sitcom.png" alt="Sit Coms">
+    </button>
+
+    <button class="tv-btn" id="btn-movies" onclick="switchToTV('movies', this)">
+      <img src="assets/button-movies.png" alt="Movies">
+    </button>
+
+    <button class="tv-btn" id="btn-specials" onclick="switchToTV('specials', this)">
+      <img src="assets/button-specials.png" alt="Specials">
+    </button>
+
+  </div><!-- /btn-panel -->
+
+</div><!-- /tv-wrapper -->
+
+<script>
+// ─── YouTube playlists (full embed src URLs from YouTube Share → Embed) ──────
+// To add/replace a video: go to YouTube → Share → Embed → copy the src="..." value
+const PLAYLISTS = {
+  gameshows: [
+    'https://www.youtube.com/embed/5tQSoVuP21w?si=Yj460tG1c6UMPh6m&controls=0',
+    'https://www.youtube.com/embed/NXwN7LuXWTw?si=li4IcbAdqfI5DlSr&controls=0',
+    'https://www.youtube.com/embed/SLt1SzKc8W8?si=bask321sOYcUjAPb&controls=0',
+    'https://www.youtube.com/embed/YpJM1d1RptA?si=onU5--LBHJtl3xWJ&controls=0',
+  ],
+  commercials: [
+    'https://www.youtube.com/embed/JvIjo8L6y5I',
+    'https://www.youtube.com/embed/WVNqmxS6IiE',
+    'https://www.youtube.com/embed/u_KxHUEmg_E',
+    'https://www.youtube.com/embed/V_uBh8dKo4M',
+    'https://www.youtube.com/embed/o3QzP0WQY1s',
+  ],
+  cartoons: [
+    'https://www.youtube.com/embed/ztrf1ou2pD8',
+    'https://www.youtube.com/embed/ly9kAI5BX00',
+    'https://www.youtube.com/embed/gUARKtPDZcg',
+    'https://www.youtube.com/embed/WBICUXikKqQ',
+    'https://www.youtube.com/embed/PHFuCFqrl9I',
+  ],
+  educational: [
+    'https://www.youtube.com/embed/aF8BbfHDyf0',
+    'https://www.youtube.com/embed/Hcx44e2gnfI',
+    'https://www.youtube.com/embed/quzy3wgIYQI',
+    'https://www.youtube.com/embed/SZ8psP4S6BQ',
+    'https://www.youtube.com/embed/V_riZw23uUk',
+  ],
+  trashtv: [
+    'https://www.youtube.com/embed/7FLM3r0g4RA',
+    'https://www.youtube.com/embed/a8x7PjfhtL4',
+    'https://www.youtube.com/embed/5WC14ACwbFg',
+    'https://www.youtube.com/embed/PNzkQ9t384U',
+    'https://www.youtube.com/embed/HtI8kxSheEU',
+    'https://www.youtube.com/embed/yUGOY4_1Op8',
+    'https://www.youtube.com/embed/jPwahcScwOw',
+  ],
+  news: [
+    'https://www.youtube.com/embed/W8xhFcxtxaM',
+    'https://www.youtube.com/embed/mB-vckMX4Hg',
+    'https://www.youtube.com/embed/CFkjhdNfA6Q',
+    'https://www.youtube.com/embed/YRdgfp30-cA',
+  ],
+  sports: [
+    'https://www.youtube.com/embed/3F5f8gCyIvk',
+    'https://www.youtube.com/embed/FxwYcRs4j8Y',
+    'https://www.youtube.com/embed/DrT5U0HT8Vk',
+    'https://www.youtube.com/embed/NuBcvNmsVvs',
+  ],
+  sitcoms: [
+    'https://www.youtube.com/embed/5WC14ACwbFg',
+    'https://www.youtube.com/embed/yUGOY4_1Op8',
+    'https://www.youtube.com/embed/HHOTtoNHYO0',
+    'https://www.youtube.com/embed/rTCB9dn4kfk',
+  ],
+  movies: [
+    'https://www.youtube.com/embed/5zpeqni3WrE',
+    'https://www.youtube.com/embed/ow1jE09IV3c',
+    'https://www.youtube.com/embed/lR3ueMCnZr4',
+    'https://www.youtube.com/embed/nIewTXCAqzA',
+  ],
+  specials: [
+    'https://www.youtube.com/embed/puNYutux1FY',
+    'https://www.youtube.com/embed/DuEzaMzaSHU',
+    'https://www.youtube.com/embed/fsY-3sI9mLI',
+    'https://www.youtube.com/embed/aphgFPsN5QI',
+  ],
+};
+
+function pickRandom(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+// Append autoplay to whatever embed src YouTube gave us
+function ytURL(embedSrc) {
+  const sep = embedSrc.includes('?') ? '&' : '?';
+  return embedSrc + sep + 'autoplay=1';
+}
+
+// ─── Tuning sound (Web Audio white noise) ────────────────────────
+let audioCtx = null;
+function playTuning() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const dur     = 0.38;
+    const buf     = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate * dur), audioCtx.sampleRate);
+    const data    = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const src     = audioCtx.createBufferSource();
+    src.buffer    = buf;
+    const gain    = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    src.connect(gain);
+    gain.connect(audioCtx.destination);
+    src.start();
+  } catch (e) {}
+}
+
+// ─── Static flash helper ─────────────────────────────────────────
+function doStaticFlash(callback) {
+  const el = document.getElementById('static-flash');
+  el.classList.remove('firing');
+  void el.offsetWidth;
+  el.classList.add('firing');
+  setTimeout(callback, 280);
+}
+
+// ─── State ───────────────────────────────────────────────────────
+let tvOn = false;
+
+function setActiveBtn(btnEl) {
+  document.querySelectorAll('.tv-btn').forEach(b => b.classList.remove('active'));
+  if (btnEl) btnEl.classList.add('active');
+}
+
+// ─── Power ───────────────────────────────────────────────────────
+function togglePower() {
+  playTuning();
+  if (!tvOn) {
+    tvOn = true;
+    doStaticFlash(() => {
+      document.body.classList.add('tv-on', 'game-mode');
+      document.getElementById('power-img').src = 'assets/button-power-on.png';
+      setActiveBtn(document.getElementById('btn-atari'));
+    });
+  } else {
+    doStaticFlash(() => {
+      tvOn = false;
+      document.body.classList.remove('tv-on', 'game-mode', 'tv-mode');
+      document.getElementById('power-img').src = 'assets/button-power-off.png';
+      document.getElementById('yt-frame').src = '';
+      setActiveBtn(null);
+    });
+  }
+}
+
+// ─── Switch to game mode ─────────────────────────────────────────
+function switchToGame() {
+  if (!tvOn) return;
+  playTuning();
+  doStaticFlash(() => {
+    document.body.classList.remove('tv-mode');
+    document.body.classList.add('game-mode');
+    document.getElementById('yt-frame').src = '';
+    setActiveBtn(document.getElementById('btn-atari'));
+  });
+}
+
+// ─── Switch to TV channel ─────────────────────────────────────────
+function switchToTV(category, btnEl) {
+  if (!tvOn) return;
+  const videoId = pickRandom(PLAYLISTS[category]);
+  playTuning();
+  doStaticFlash(() => {
+    document.body.classList.remove('game-mode');
+    document.body.classList.add('tv-mode');
+    // Reload game iframe to kill its audio
+    const gf = document.getElementById('game-frame');
+    gf.src = gf.src;
+    document.getElementById('yt-frame').src = ytURL(videoId);
+    setActiveBtn(btnEl);
+  });
+}
+</script>
+</body>
+</html>

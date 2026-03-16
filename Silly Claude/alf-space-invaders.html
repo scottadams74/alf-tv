@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ALF vs Space Cats</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  overflow: hidden;
+}
+#hud {
+  color: #0f0;
+  width: 800px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  letter-spacing: 1px;
+  padding: 6px 4px;
+}
+#hud span { text-shadow: 0 0 8px #0f0; }
+#lives-display { color: #ff4444; text-shadow: 0 0 8px #f44; }
+canvas {
+  display: block;
+  border-left: 2px solid #0f0;
+  border-right: 2px solid #0f0;
+  border-bottom: 2px solid #0f0;
+  box-shadow: 0 0 20px #0f08, 0 0 60px #0f02;
+}
+#controls {
+  color: #444;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  letter-spacing: 1px;
+  margin-top: 8px;
+  text-align: center;
+}
+#bottom-bar {
+  width: 800px;
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+}
+#sound-btn {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 9px;
+  letter-spacing: 1px;
+  color: #0f0;
+  background: #000;
+  border: 2px solid #0f0;
+  padding: 7px 14px;
+  cursor: pointer;
+  text-transform: uppercase;
+  box-shadow: 0 0 8px #0f06, inset 0 0 6px #0f02;
+  text-shadow: 0 0 8px #0f0;
+  transition: none;
+  outline: none;
+  /* pixel-art chunky corners via box-shadow layering */
+  image-rendering: pixelated;
+  position: relative;
+}
+#sound-btn::before,
+#sound-btn::after {
+  content: '';
+  position: absolute;
+  background: #0f0;
+}
+/* top-left & bottom-right notch to fake pixel corners */
+#sound-btn::before { width: 4px; height: 4px; top: -4px; left: -4px; }
+#sound-btn::after  { width: 4px; height: 4px; bottom: -4px; right: -4px; }
+#sound-btn:hover {
+  color: #000;
+  background: #0f0;
+  box-shadow: 0 0 18px #0f0, inset 0 0 10px #0a0;
+  text-shadow: none;
+}
+#sound-btn.muted {
+  color: #ff2222;
+  border-color: #ff2222;
+  box-shadow: 0 0 8px #f006, inset 0 0 6px #f002;
+  text-shadow: 0 0 8px #f00;
+}
+#sound-btn.muted::before,
+#sound-btn.muted::after { background: #ff2222; }
+#sound-btn.muted:hover {
+  color: #000;
+  background: #ff2222;
+  box-shadow: 0 0 18px #f00, inset 0 0 10px #a00;
+  text-shadow: none;
+}
+</style>
+</head>
+<body>
+<div id="hud">
+  <span>SCORE: <span id="score">0</span></span>
+  <span id="lives-display">ALF: ❤️❤️❤️</span>
+  <span>HI: <span id="hiscore">0</span></span>
+</div>
+<canvas id="c" width="800" height="560"></canvas>
+<div id="controls">← → MOVE &nbsp;|&nbsp; SPACE SHOOT &nbsp;|&nbsp; P PAUSE</div>
+<div id="bottom-bar">
+  <button id="sound-btn" onclick="toggleSound()">♪ SOUND ON</button>
+</div>
+<audio id="bgm" src="music.mp3" loop preload="auto"></audio>
+<audio id="snd-count" src="count1.wav" preload="auto"></audio>
+<audio id="snd-go"    src="countgo.wav" preload="auto"></audio>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 800, H = 560;
+
+// ─── Drawing: ALF ───────────────────────────────────────────────
+function drawAlf(x, y) {
+  const w = 52, h = 42;
+  const cx = x - w/2, cy = y - h;
+
+  ctx.fillStyle = '#b5733a';
+  ctx.fillRect(cx, cy, w, h);
+
+  ctx.fillStyle = '#8b5220';
+  for (let i = 0; i < 4; i++) ctx.fillRect(cx + i*13, cy, 6, h);
+
+  ctx.fillStyle = '#c4874a';
+  ctx.fillRect(cx+4, cy, w-8, h*0.55);
+
+  ctx.fillStyle = '#7a3b1a';
+  ctx.beginPath();
+  ctx.ellipse(cx + w/2, cy + h*0.38, 12, 9, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle = '#5a2a0e';
+  ctx.beginPath(); ctx.ellipse(cx+w/2-4, cy+h*0.38, 4, 3, 0, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(cx+w/2+4, cy+h*0.38, 4, 3, 0, 0, Math.PI*2); ctx.fill();
+
+  ctx.fillStyle = '#2a1a00';
+  ctx.fillRect(cx+10, cy+8, 9, 7);
+  ctx.fillRect(cx+32, cy+8, 9, 7);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(cx+11, cy+9, 3, 3);
+  ctx.fillRect(cx+33, cy+9, 3, 3);
+
+  ctx.strokeStyle = '#5a2a0e'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx+16, cy+h*0.55);
+  ctx.quadraticCurveTo(cx+w/2, cy+h*0.65, cx+w-16, cy+h*0.55);
+  ctx.stroke();
+
+  ctx.strokeStyle = '#888'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(cx+14, cy); ctx.lineTo(cx+8, cy-12); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+w-14, cy); ctx.lineTo(cx+w-8, cy-12); ctx.stroke();
+  ctx.fillStyle = '#0ff';
+  ctx.beginPath(); ctx.arc(cx+8, cy-12, 3, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx+w-8, cy-12, 3, 0, Math.PI*2); ctx.fill();
+
+  ctx.fillStyle = '#888';
+  ctx.fillRect(cx + w/2 - 3, cy - 14, 6, 14);
+  ctx.fillStyle = '#aaa';
+  ctx.fillRect(cx + w/2 - 5, cy - 16, 10, 4);
+}
+
+// ─── Drawing: Cat Alien ─────────────────────────────────────────
+function drawCatAlien(x, y, color, frame, row) {
+  const w = 44, h = 36;
+  const cx = x - w/2, cy = y - h;
+
+  ctx.fillStyle = color;
+  ctx.fillRect(cx+4, cy+h*0.5, w-8, h*0.5);
+  ctx.fillRect(cx+6, cy+h*0.1, w-12, h*0.55);
+
+  ctx.beginPath(); ctx.moveTo(cx+6, cy+h*0.15); ctx.lineTo(cx+1, cy); ctx.lineTo(cx+14, cy+h*0.25); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx+w-6, cy+h*0.15); ctx.lineTo(cx+w-1, cy); ctx.lineTo(cx+w-14, cy+h*0.25); ctx.closePath(); ctx.fill();
+
+  const earColor = row < 2 ? '#ff99cc' : (row < 4 ? '#ff88ff' : '#aaffff');
+  ctx.fillStyle = earColor;
+  ctx.beginPath(); ctx.moveTo(cx+7, cy+h*0.16); ctx.lineTo(cx+4, cy+3); ctx.lineTo(cx+13, cy+h*0.24); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx+w-7, cy+h*0.16); ctx.lineTo(cx+w-4, cy+3); ctx.lineTo(cx+w-13, cy+h*0.24); ctx.closePath(); ctx.fill();
+
+  ctx.fillStyle = '#ffff00';
+  if (frame === 0) {
+    ctx.fillRect(cx+9, cy+h*0.22, 10, 8); ctx.fillRect(cx+w-19, cy+h*0.22, 10, 8);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(cx+13, cy+h*0.22, 3, 8); ctx.fillRect(cx+w-15, cy+h*0.22, 3, 8);
+  } else {
+    ctx.fillRect(cx+9, cy+h*0.27, 10, 3); ctx.fillRect(cx+w-19, cy+h*0.27, 10, 3);
+  }
+
+  ctx.fillStyle = '#cc44cc';
+  ctx.beginPath(); ctx.arc(cx+w/2, cy+h*0.48, 3, 0, Math.PI*2); ctx.fill();
+
+  ctx.strokeStyle = '#fff4'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(cx+w/2-5, cy+h*0.54); ctx.lineTo(cx+w/2, cy+h*0.58); ctx.lineTo(cx+w/2+5, cy+h*0.54); ctx.stroke();
+
+  ctx.strokeStyle = '#ffffff88'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(cx+14, cy+h*0.48); ctx.lineTo(cx+2, cy+h*0.42); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+14, cy+h*0.52); ctx.lineTo(cx+2, cy+h*0.58); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+14, cy+h*0.56); ctx.lineTo(cx+2, cy+h*0.65); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+w-14, cy+h*0.48); ctx.lineTo(cx+w-2, cy+h*0.42); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+w-14, cy+h*0.52); ctx.lineTo(cx+w-2, cy+h*0.58); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+w-14, cy+h*0.56); ctx.lineTo(cx+w-2, cy+h*0.65); ctx.stroke();
+
+  ctx.strokeStyle = color; ctx.lineWidth = 3;
+  ctx.beginPath();
+  if (frame === 0) { ctx.moveTo(cx+w-6, cy+h*0.85); ctx.quadraticCurveTo(cx+w+12, cy+h*0.5, cx+w+8, cy+h*0.2); }
+  else             { ctx.moveTo(cx+w-6, cy+h*0.85); ctx.quadraticCurveTo(cx+w+14, cy+h*0.95, cx+w+18, cy+h*0.7); }
+  ctx.stroke();
+
+  ctx.fillStyle = color;
+  if (frame === 0) { ctx.fillRect(cx+8, cy+h*0.9, 8, h*0.1); ctx.fillRect(cx+w-16, cy+h*0.9, 8, h*0.1); }
+  else             { ctx.fillRect(cx+8, cy+h*0.85, 8, h*0.15); ctx.fillRect(cx+w-16, cy+h*0.85, 8, h*0.15); }
+}
+
+// ─── Drawing: Bullets ───────────────────────────────────────────
+function drawBullet(b) {
+  if (b.dead) return;
+  if (b.alien) {
+    ctx.fillStyle = '#ff4444'; ctx.fillRect(b.x-2, b.y-8, 4, 16);
+    ctx.fillStyle = '#ffaaaa'; ctx.fillRect(b.x-1, b.y-6, 2, 4);
+    ctx.strokeStyle = '#ff6666'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI*2); ctx.stroke();
+  } else {
+    ctx.shadowColor = '#0ff'; ctx.shadowBlur = 8;
+    ctx.fillStyle = '#0ff'; ctx.fillRect(b.x-2, b.y-10, 4, 20);
+    ctx.fillStyle = '#fff'; ctx.fillRect(b.x-1, b.y-8, 2, 4);
+    ctx.shadowBlur = 0;
+  }
+}
+
+// ─── Drawing: Shields ───────────────────────────────────────────
+function drawShield(shield) {
+  shield.blocks.forEach(b => {
+    if (!b.alive) return;
+    const alpha = b.hp / 4;
+    ctx.fillStyle = `rgba(0,255,0,${alpha})`;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+  });
+}
+
+// ─── Drawing: Explosions ────────────────────────────────────────
+function drawExplosion(ex, now) {
+  const age = (now - ex.t) / ex.life;
+  if (age >= 1) return;
+  const r = ex.r * (1 - age);
+  ctx.globalAlpha = 1 - age;
+  const grad = ctx.createRadialGradient(ex.x, ex.y, 0, ex.x, ex.y, r);
+  grad.addColorStop(0, '#fff');
+  grad.addColorStop(0.3, '#ff8');
+  grad.addColorStop(0.7, '#f80');
+  grad.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(ex.x, ex.y, r, 0, Math.PI*2); ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+// ─── Drawing: Stars ─────────────────────────────────────────────
+const stars = Array.from({length: 120}, () => ({
+  x: Math.random()*W, y: Math.random()*H, s: Math.random()*2+0.5, b: Math.random()
+}));
+function drawStars(t) {
+  stars.forEach(s => {
+    ctx.globalAlpha = 0.4 + 0.6 * Math.abs(Math.sin(t*0.001 + s.b*100));
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(s.x, s.y, s.s, s.s);
+  });
+  ctx.globalAlpha = 1;
+}
+
+// ─── Drawing: Countdown ─────────────────────────────────────────
+function drawCountdown(phase, progress) {
+  // phase: 0='3', 1='2', 2='1', 3='GO!'
+  const labels  = ['3', '2', '1', 'GO!'];
+  const colors  = ['#ff2222', '#ff8800', '#ffff00', '#00ff44'];
+  const glows   = ['#ff0000', '#ff4400', '#ffff00', '#00ff00'];
+  const label   = labels[phase];
+  const color   = colors[phase];
+  const glow    = glows[phase];
+
+  // Scale: starts large, settles to normal
+  const bounce  = 1 + 0.6 * Math.pow(1 - progress, 2);
+  const size    = phase === 3 ? Math.floor(72 * bounce) : Math.floor(120 * bounce);
+
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // Glow layers
+  for (let g = 3; g >= 1; g--) {
+    ctx.font = `${size}px 'Press Start 2P', monospace`;
+    ctx.fillStyle = glow;
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = 30 * g;
+    ctx.globalAlpha = 0.3;
+    ctx.fillText(label, W/2, H/2);
+  }
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+
+  // Solid fill
+  ctx.font = `${size}px 'Press Start 2P', monospace`;
+  ctx.fillStyle = color;
+  ctx.shadowColor = glow;
+  ctx.shadowBlur = 20;
+  ctx.fillText(label, W/2, H/2);
+  ctx.shadowBlur = 0;
+
+  // "GET READY" subtitle
+  if (phase < 3) {
+    ctx.font = `14px 'Press Start 2P', monospace`;
+    ctx.fillStyle = '#0ff';
+    ctx.globalAlpha = 0.7 + 0.3 * Math.sin(Date.now() * 0.008);
+    ctx.fillText('GET READY...', W/2, H/2 + 90);
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
+}
+
+// ─── Game constants ──────────────────────────────────────────────
+const COLS = 11, ROWS = 5;
+const CAT_W = 48, CAT_H = 44, GAP_X = 12, GAP_Y = 10;
+const START_X = 60, START_Y = 80;
+const ROW_COLORS = ['#ff3399','#ff66aa','#cc44ff','#9933ff','#44aaff'];
+const ROW_POINTS  = [30, 20, 20, 10, 10];
+
+// ─── Game state ──────────────────────────────────────────────────
+let state;       // 'title' | 'countdown' | 'playing' | 'gameover' | 'win'
+let score, hiscore, lives;
+let alf;
+let aliens, bullets, alienBullets, shields, explosions;
+let alienDir, alienMoveTimer, alienMoveInterval, alienDropAmount;
+let alienShootTimer, alienShootInterval, alienFrame, alienFrameTimer;
+let lastShot, paused;
+let countdownStart, countdownPhase, lastPlayedPhase;  // countdown state
+let lastTime = 0;
+let titleBlink = true, titleBlinkTimer = 0;
+
+// ─── Keys ────────────────────────────────────────────────────────
+const keys = {};
+const GAME_KEYS = new Set(['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter','KeyP']);
+document.addEventListener('keydown', e => {
+  if (GAME_KEYS.has(e.code)) e.preventDefault();
+
+  // Ignore held-down repeats for action keys
+  if (e.repeat && e.code !== 'ArrowLeft' && e.code !== 'ArrowRight') return;
+
+  keys[e.code] = true;
+
+  if (e.code === 'KeyP' && state === 'playing') {
+    paused = !paused;
+    if (paused) { bgm.pause(); } else if (soundOn) { bgm.play().catch(() => {}); }
+  }
+
+  if (e.code === 'Enter' || e.code === 'Space') {
+    if (state === 'title') {
+      clearKeys();
+      startCountdown();
+    } else if (state === 'gameover' || state === 'win') {
+      clearKeys();
+      fullReset();
+    }
+  }
+});
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+function clearKeys() {
+  Object.keys(keys).forEach(k => { keys[k] = false; });
+}
+
+// ─── Shield factory ──────────────────────────────────────────────
+function makeShields() {
+  const positions = [130, 295, 460, 625];
+  return positions.map(sx => {
+    const blocks = [];
+    const bw = 12, bh = 8;
+    [[0,0],[1,0],[2,0],[3,0],[0,1],[1,1],[2,1],[3,1],[0,2],[3,2]].forEach(([c, r]) => {
+      blocks.push({ x: sx + c*bw, y: H - 110 + r*bh, w: bw, h: bh, alive: true, hp: 4 });
+    });
+    return { blocks };
+  });
+}
+
+// ─── Reset helpers ───────────────────────────────────────────────
+function fullReset() {
+  score = 0;
+  hiscore = parseInt(localStorage.getItem('alfHi') || '0');
+  lives = 3;
+  paused = false;
+
+  resetAliens();
+  shields    = makeShields();
+  explosions = [];
+  bullets    = [];
+  alienBullets = [];
+
+  resetAlfPosition();
+  lastShot = -9999;
+
+  document.getElementById('score').textContent = '0';
+  document.getElementById('hiscore').textContent = hiscore;
+  updateLivesDisplay();
+
+  startCountdown();
+}
+
+function resetAliens() {
+  aliens = [];
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      aliens.push({ col: c, row: r,
+        x: START_X + c*(CAT_W+GAP_X),
+        y: START_Y + r*(CAT_H+GAP_Y),
+        alive: true, color: ROW_COLORS[r], points: ROW_POINTS[r] });
+    }
+  }
+  alienDir          = 1;
+  alienMoveTimer    = 0;
+  alienMoveInterval = 800;
+  alienDropAmount   = 18;
+  alienShootTimer   = 0;
+  alienShootInterval = 1200;
+  alienFrame        = 0;
+  alienFrameTimer   = 0;
+}
+
+function resetAlfPosition() {
+  alf = { x: W/2, y: H - 30, w: 52, speed: 320, invincible: 0 };
+}
+
+// ─── Countdown ───────────────────────────────────────────────────
+function startCountdown() {
+  state          = 'countdown';
+  countdownPhase = 0;
+  countdownStart = null;   // set on first frame
+  bullets        = [];
+  alienBullets   = [];
+}
+
+// ─── Lives ───────────────────────────────────────────────────────
+function updateLivesDisplay() {
+  document.getElementById('lives-display').textContent =
+    'ALF: ' + '❤️'.repeat(Math.max(0, lives));
+}
+
+function loseLife() {
+  lives--;
+  updateLivesDisplay();
+  if (score > hiscore) { hiscore = score; localStorage.setItem('alfHi', hiscore); }
+  document.getElementById('hiscore').textContent = hiscore;
+
+  if (lives <= 0) {
+    state = 'gameover';
+  } else {
+    // Respawn this turn — reset ALF, clear projectiles, show countdown
+    resetAlfPosition();
+    bullets      = [];
+    alienBullets = [];
+    explosions   = [];
+    startCountdown();
+  }
+}
+
+// ─── Update ──────────────────────────────────────────────────────
+function update(dt, t) {
+  if (paused) return;
+
+  // ── Move ALF ──
+  const speed = alf.speed * (dt / 1000);
+  if (keys['ArrowLeft']  && alf.x - alf.w/2 > 4)      alf.x -= speed;
+  if (keys['ArrowRight'] && alf.x + alf.w/2 < W - 4)  alf.x += speed;
+
+  // ── Shoot ──
+  if (keys['Space'] && t - lastShot > 350 && bullets.filter(b => !b.dead && !b.alien).length < 2) {
+    bullets.push({ x: alf.x, y: alf.y - 42, vy: -600, dead: false, alien: false });
+    lastShot = t;
+  }
+
+  // ── Move bullets ──
+  const dts = dt / 1000;
+  bullets.forEach(b => {
+    if (!b.dead) b.y += b.vy * dts;
+  });
+  alienBullets.forEach(b => {
+    if (!b.dead) b.y += b.vy * dts;
+  });
+
+  // Kill out-of-bounds bullets
+  bullets.forEach(b => { if (b.y < -10) b.dead = true; });
+  alienBullets.forEach(b => { if (b.y > H + 10) b.dead = true; });
+
+  // Trim dead bullets periodically
+  bullets      = bullets.filter(b => !b.dead);
+  alienBullets = alienBullets.filter(b => !b.dead);
+
+  // ── Alien animation ──
+  alienFrameTimer += dt;
+  if (alienFrameTimer > 500) { alienFrame ^= 1; alienFrameTimer = 0; }
+
+  // ── Move aliens ──
+  const alive = aliens.filter(a => a.alive);
+  if (alive.length === 0) { state = 'win'; return; }
+
+  const speedMult = 1 + (COLS*ROWS - alive.length) * 0.02;
+  alienMoveInterval = Math.max(100, 800 / speedMult);
+
+  alienMoveTimer += dt;
+  if (alienMoveTimer >= alienMoveInterval) {
+    alienMoveTimer = 0;
+
+    const rightmost = Math.max(...alive.map(a => a.x + CAT_W/2));
+    const leftmost  = Math.min(...alive.map(a => a.x - CAT_W/2));
+
+    if ((alienDir === 1 && rightmost >= W - 8) || (alienDir === -1 && leftmost <= 8)) {
+      alienDir *= -1;
+      aliens.forEach(a => { if (a.alive) a.y += alienDropAmount; });
+    } else {
+      const step = 14 * alienDir;
+      aliens.forEach(a => { if (a.alive) a.x += step; });
+    }
+  }
+
+  // ── Alien shooting ──
+  alienShootTimer += dt;
+  if (alienShootTimer >= alienShootInterval && alienBullets.length < 5) {
+    alienShootTimer   = 0;
+    alienShootInterval = 700 + Math.random() * 900;
+    const cols = {};
+    alive.forEach(a => { if (!cols[a.col] || a.row > cols[a.col].row) cols[a.col] = a; });
+    const shooters = Object.values(cols);
+    if (shooters.length) {
+      const s = shooters[Math.floor(Math.random() * shooters.length)];
+      alienBullets.push({ x: s.x, y: s.y + CAT_H/2, vy: 380, dead: false, alien: true });
+    }
+  }
+
+  // ── Bullet vs aliens ──
+  bullets.forEach(b => {
+    if (b.dead || b.alien) return;
+    aliens.forEach(a => {
+      if (!a.alive || b.dead) return;
+      if (Math.abs(b.x - a.x) < CAT_W/2 + 2 && Math.abs(b.y - a.y) < CAT_H/2 + 2) {
+        a.alive = false;
+        b.dead  = true;
+        score  += a.points;
+        if (score > hiscore) { hiscore = score; localStorage.setItem('alfHi', hiscore); }
+        document.getElementById('score').textContent   = score;
+        document.getElementById('hiscore').textContent = hiscore;
+        explosions.push({ x: a.x, y: a.y, r: 28, t, life: 500 });
+      }
+    });
+  });
+
+  // ── Bullets vs shields ──
+  [...bullets, ...alienBullets].forEach(b => {
+    if (b.dead) return;
+    shields.forEach(s => {
+      s.blocks.forEach(bl => {
+        if (!bl.alive || b.dead) return;
+        if (b.x >= bl.x && b.x <= bl.x+bl.w && b.y >= bl.y && b.y <= bl.y+bl.h) {
+          bl.hp--;
+          if (bl.hp <= 0) bl.alive = false;
+          b.dead = true;
+        }
+      });
+    });
+  });
+
+  // ── Alien bullets vs ALF ── (only one hit per frame)
+  if (alf.invincible <= 0) {
+    for (const b of alienBullets) {
+      if (b.dead) continue;
+      if (Math.abs(b.x - alf.x) < 24 && b.y >= alf.y - h && b.y <= alf.y) {
+        b.dead = true;
+        explosions.push({ x: alf.x, y: alf.y - 20, r: 40, t, life: 600 });
+        loseLife();
+        break;  // only one hit per frame
+      }
+    }
+  }
+
+  // ── Aliens reached bottom ──
+  if (alive.some(a => a.y + CAT_H > H - 45)) {
+    loseLife();
+    return;
+  }
+
+  // ── Expire explosions ──
+  explosions = explosions.filter(e => t - e.t < e.life);
+
+  // ── Invincibility countdown ──
+  if (alf.invincible > 0) alf.invincible -= dt;
+}
+
+// Fix: `h` used in alien-vs-alf check (ALF height)
+const h = 42;
+
+// ─── Draw helpers ────────────────────────────────────────────────
+function drawScene(t) {
+  drawStars(t);
+  shields.forEach(drawShield);
+  ctx.fillStyle = '#0f0';
+  ctx.fillRect(0, H - 8, W, 2);
+
+  aliens.forEach(a => {
+    if (a.alive) drawCatAlien(a.x, a.y + CAT_H/2, a.color, alienFrame, a.row);
+  });
+
+  // ALF blinks while invincible
+  const showAlf = alf.invincible <= 0 || Math.floor(alf.invincible / 100) % 2 === 0;
+  if (showAlf) drawAlf(alf.x, alf.y);
+
+  bullets.forEach(drawBullet);
+  alienBullets.forEach(drawBullet);
+  explosions.forEach(e => drawExplosion(e, t));
+}
+
+// ─── Title screen ────────────────────────────────────────────────
+function drawTitle(t) {
+  drawStars(t);
+
+  ctx.textAlign = 'center';
+  ctx.font = "bold 40px 'Press Start 2P', monospace";
+  const grad = ctx.createLinearGradient(W/2-200, 0, W/2+200, 0);
+  grad.addColorStop(0, '#ff4499'); grad.addColorStop(0.5, '#ff88ff'); grad.addColorStop(1, '#4488ff');
+  ctx.fillStyle = grad;
+  ctx.shadowColor = '#ff44ff'; ctx.shadowBlur = 20;
+  ctx.fillText('ALF vs', W/2, 90);
+  ctx.fillText('SPACE CATS', W/2, 140);
+  ctx.shadowBlur = 0;
+
+  ctx.font = "12px 'Press Start 2P', monospace";
+  ctx.fillStyle = '#0ff';
+  ctx.fillText('"No cats were harmed...', W/2, 178);
+  ctx.fillText('except in space"', W/2, 198);
+
+  drawAlf(W/2, 300);
+  drawCatAlien(W/2-150, 278, '#ff3399', alienFrame,   0);
+  drawCatAlien(W/2+150, 278, '#9933ff', alienFrame,   2);
+  drawCatAlien(W/2-90,  218, '#44aaff', alienFrame^1, 4);
+  drawCatAlien(W/2+90,  218, '#cc44ff', alienFrame^1, 3);
+
+  titleBlinkTimer += 16;
+  if (titleBlinkTimer > 600) { titleBlink = !titleBlink; titleBlinkTimer = 0; }
+  if (titleBlink) {
+    ctx.font = "14px 'Press Start 2P', monospace";
+    ctx.fillStyle = '#ff0'; ctx.shadowColor = '#ff0'; ctx.shadowBlur = 12;
+    ctx.fillText('PRESS SPACE TO START', W/2, 390);
+    ctx.shadowBlur = 0;
+  }
+
+  ctx.font = "9px 'Press Start 2P', monospace";
+  ctx.fillStyle = '#0f0';
+  ctx.fillText('← → MOVE    SPACE SHOOT    P PAUSE', W/2, 440);
+  ctx.fillStyle = '#ff3399'; ctx.fillText('■ = 30 pts', W/2-130, 475);
+  ctx.fillStyle = '#cc44ff'; ctx.fillText('■ = 20 pts', W/2, 475);
+  ctx.fillStyle = '#44aaff'; ctx.fillText('■ = 10 pts', W/2+130, 475);
+  ctx.textAlign = 'left';
+}
+
+// ─── Overlay (Game Over / Win) ───────────────────────────────────
+function drawOverlay(t, title, sub, col, glow) {
+  drawScene(t);
+  ctx.fillStyle = 'rgba(0,0,0,0.72)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center';
+
+  ctx.font = "42px 'Press Start 2P', monospace";
+  ctx.fillStyle = col; ctx.shadowColor = glow; ctx.shadowBlur = 28;
+  ctx.fillText(title, W/2, H/2 - 60);
+  ctx.shadowBlur = 0;
+
+  ctx.font = "14px 'Press Start 2P', monospace";
+  ctx.fillStyle = '#fff';
+  ctx.fillText(sub, W/2, H/2);
+
+  ctx.font = "11px 'Press Start 2P', monospace";
+  ctx.fillStyle = '#0ff';
+  ctx.fillText('SCORE: ' + score + '   HI: ' + hiscore, W/2, H/2 + 45);
+
+  // Blink prompt
+  if (Math.floor(Date.now() / 600) % 2) {
+    ctx.font = "12px 'Press Start 2P', monospace";
+    ctx.fillStyle = '#ff0'; ctx.shadowColor = '#ff0'; ctx.shadowBlur = 10;
+    ctx.fillText('PRESS ENTER TO PLAY AGAIN', W/2, H/2 + 100);
+    ctx.shadowBlur = 0;
+  }
+  ctx.textAlign = 'left';
+}
+
+// ─── Main loop ───────────────────────────────────────────────────
+function loop(now) {
+  const dt = Math.min(now - lastTime, 50);
+  lastTime = now;
+
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+
+  if (state === 'title') {
+    alienFrameTimer += dt;
+    if (alienFrameTimer > 500) { alienFrame ^= 1; alienFrameTimer = 0; }
+    drawTitle(now);
+
+  } else if (state === 'countdown') {
+    // Init countdown on first frame
+    if (countdownStart === null) { countdownStart = now; lastPlayedPhase = -99; }
+
+    const elapsed     = now - countdownStart;
+    const PRE_MS      = 2000; // 2-second pause before numbers appear
+    const PHASE_MS    = 900;  // ms per digit
+    const GO_MS       = 700;
+    const total       = PRE_MS + PHASE_MS * 3 + GO_MS;
+
+    let prevPhase = countdownPhase;
+    if      (elapsed < PRE_MS)                        countdownPhase = -1; // pre-delay
+    else if (elapsed < PRE_MS + PHASE_MS)             countdownPhase = 0;  // "3"
+    else if (elapsed < PRE_MS + PHASE_MS * 2)         countdownPhase = 1;  // "2"
+    else if (elapsed < PRE_MS + PHASE_MS * 3)         countdownPhase = 2;  // "1"
+    else if (elapsed < total)                         countdownPhase = 3;  // "GO!"
+    else {
+      // Countdown done — start playing
+      clearKeys();
+      lastShot = now - 9999;
+      alf.invincible = 500;
+      state = 'playing';
+    }
+
+    // Play sounds exactly once when each phase begins
+    if (state === 'countdown' && countdownPhase !== lastPlayedPhase) {
+      if (countdownPhase >= 0 && countdownPhase <= 2) {
+        const snd = document.getElementById('snd-count');
+        snd.currentTime = 0;
+        snd.play().catch(() => {});
+      } else if (countdownPhase === 3) {
+        const snd = document.getElementById('snd-go');
+        snd.currentTime = 0;
+        snd.play().catch(() => {});
+      }
+      lastPlayedPhase = countdownPhase;
+    }
+
+    if (state === 'countdown') {
+      // Draw game scene behind countdown
+      drawStars(now);
+      shields.forEach(drawShield);
+      ctx.fillStyle = '#0f0'; ctx.fillRect(0, H - 8, W, 2);
+      aliens.forEach(a => { if (a.alive) drawCatAlien(a.x, a.y + CAT_H/2, a.color, alienFrame, a.row); });
+      drawAlf(alf.x, alf.y);
+
+      // Dimmer overlay
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(0, 0, W, H);
+
+      // Only draw numbers after pre-delay
+      if (countdownPhase >= 0) {
+        const phaseStart = PRE_MS + (countdownPhase < 3 ? countdownPhase * PHASE_MS : PHASE_MS * 3);
+        const phaseDur   = countdownPhase < 3 ? PHASE_MS : GO_MS;
+        const progress   = Math.min(1, (elapsed - phaseStart) / phaseDur);
+        drawCountdown(countdownPhase, progress);
+      }
+    }
+
+  } else if (state === 'playing') {
+    update(dt, now);
+    drawScene(now);
+
+    if (paused) {
+      ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, W, H);
+      ctx.textAlign = 'center';
+      ctx.font = "36px 'Press Start 2P', monospace";
+      ctx.fillStyle = '#ff0'; ctx.shadowColor = '#ff0'; ctx.shadowBlur = 20;
+      ctx.fillText('PAUSED', W/2, H/2 - 20);
+      ctx.shadowBlur = 0;
+      ctx.font = "12px 'Press Start 2P', monospace";
+      ctx.fillStyle = '#0ff';
+      ctx.fillText('P to resume', W/2, H/2 + 30);
+      ctx.textAlign = 'left';
+    }
+
+  } else if (state === 'gameover') {
+    drawOverlay(now, 'GAME OVER', 'The cats have taken over!', '#ff2222', '#ff0000');
+
+  } else if (state === 'win') {
+    drawOverlay(now, 'ALF WINS!', 'All cats sent back to space!', '#ffff00', '#ffff00');
+  }
+
+  requestAnimationFrame(loop);
+}
+
+// ─── Boot ────────────────────────────────────────────────────────
+function boot() {
+  hiscore = parseInt(localStorage.getItem('alfHi') || '0');
+  score   = 0;
+  lives   = 3;
+  paused  = false;
+
+  resetAliens();
+  resetAlfPosition();
+  shields      = makeShields();
+  explosions   = [];
+  bullets      = [];
+  alienBullets = [];
+  lastShot     = -9999;
+
+  document.getElementById('score').textContent   = '0';
+  document.getElementById('hiscore').textContent = hiscore;
+  updateLivesDisplay();
+
+  state = 'title';
+}
+
+const bgm = document.getElementById('bgm');
+bgm.volume = 0.30;
+
+// Start music on first user interaction (browser autoplay policy)
+function startMusic() {
+  bgm.play().catch(() => {});
+  document.removeEventListener('keydown', startMusic);
+  document.removeEventListener('click', startMusic);
+}
+document.addEventListener('keydown', startMusic);
+document.addEventListener('click', startMusic);
+
+let soundOn = true;
+function toggleSound() {
+  soundOn = !soundOn;
+  const btn = document.getElementById('sound-btn');
+  if (soundOn) {
+    bgm.muted = false;
+    bgm.play().catch(() => {});
+    btn.textContent = '♪ SOUND ON';
+    btn.classList.remove('muted');
+  } else {
+    bgm.muted = true;
+    btn.textContent = '✕ SOUND OFF';
+    btn.classList.add('muted');
+  }
+}
+
+boot();
+requestAnimationFrame(t => { lastTime = t; requestAnimationFrame(loop); });
+</script>
+</body>
+</html>
