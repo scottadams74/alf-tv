@@ -207,6 +207,17 @@ body.lights-off #room-dark {
   z-index: 10;
 }
 
+/* ─── ALF easter egg hotspot ────────────────────────────────── */
+#alf-control {
+  position: fixed;
+  width: 220px;
+  height: 200px;
+  top: 230px;
+  left: calc(50% + 1015px);
+  cursor: pointer;
+  z-index: 10;
+}
+
 /* ─── Sloth statue easter egg hotspot ───────────────────────── */
 #sloth-control {
   position: fixed;
@@ -257,6 +268,9 @@ body.tv-mode #tv-on-overlay { display: block; }
 
 <!-- Light switch easter egg hotspot (invisible clickable area) -->
 <div id="switch-control" onclick="toggleLights()"></div>
+
+<!-- ALF easter egg hotspot -->
+<div id="alf-control" onclick="playAlf()"></div>
 
 <!-- Sloth statue easter egg hotspot -->
 <div id="sloth-control" onclick="playSloth()"></div>
@@ -437,6 +451,22 @@ function pickRandom(arr) {
 function ytURL(embedSrc) {
   const sep = embedSrc.includes('?') ? '&' : '?';
   return embedSrc + sep + 'autoplay=1';
+}
+
+// ─── ALF easter egg ──────────────────────────────────────────────
+const ALF_CLIPS = [
+  'assets/alf-lock.mp3',
+  'assets/alf-police.mp3',
+  'assets/alf-special.mp3',
+  'assets/alf-voice.mp3',
+];
+let alfAudio = null;
+function playAlf() {
+  const src = ALF_CLIPS[Math.floor(Math.random() * ALF_CLIPS.length)];
+  if (!alfAudio) alfAudio = new Audio();
+  alfAudio.src = src;
+  alfAudio.currentTime = 0;
+  alfAudio.play();
 }
 
 // ─── Sloth statue easter egg ─────────────────────────────────────
