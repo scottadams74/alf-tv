@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -208,6 +207,17 @@ body.lights-off #room-dark {
   z-index: 10;
 }
 
+/* ─── Sloth statue easter egg hotspot ───────────────────────── */
+#sloth-control {
+  position: fixed;
+  width: 220px;
+  height: 330px;
+  top: 387px;
+  left: calc(50% + 1155px);
+  cursor: pointer;
+  z-index: 10;
+}
+
 #tv-wrapper {
   z-index: 5;
 }
@@ -247,6 +257,9 @@ body.tv-mode #tv-on-overlay { display: block; }
 
 <!-- Light switch easter egg hotspot (invisible clickable area) -->
 <div id="switch-control" onclick="toggleLights()"></div>
+
+<!-- Sloth statue easter egg hotspot -->
+<div id="sloth-control" onclick="playSloth()"></div>
 
 <div id="tv-wrapper">
 
@@ -424,6 +437,14 @@ function pickRandom(arr) {
 function ytURL(embedSrc) {
   const sep = embedSrc.includes('?') ? '&' : '?';
   return embedSrc + sep + 'autoplay=1';
+}
+
+// ─── Sloth statue easter egg ─────────────────────────────────────
+let slothAudio = null;
+function playSloth() {
+  if (!slothAudio) slothAudio = new Audio('assets/sloth.mp3');
+  slothAudio.currentTime = 0;
+  slothAudio.play();
 }
 
 // ─── Light switch easter egg ─────────────────────────────────────
