@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -87,7 +88,7 @@ body {
 /* covers the video title bar across the top */
 #yt-mask-top {
   top: 0; left: 0; right: 0;
-  height: 55px;
+  height: 50px;
 }
 /* covers the full bottom control bar */
 #yt-mask-logo {
@@ -183,6 +184,34 @@ body {
   filter: drop-shadow(0 0 5px #ff0) brightness(1.3);
 }
 
+/* ─── Lights-off dark overlay ───────────────────────────────── */
+#room-dark {
+  position: fixed;
+  inset: 0;
+  background: url('assets/living-room-dark.png') no-repeat center top;
+  z-index: 1;
+  display: none;
+  pointer-events: none;
+}
+body.lights-off #room-dark {
+  display: block;
+}
+
+/* ─── Light switch hotspot (invisible, tracks image center) ──── */
+#switch-control {
+  position: fixed;
+  width: 120px;
+  height: 170px;
+  top: 978px;
+  left: calc(50% - 1237px);
+  cursor: pointer;
+  z-index: 10;
+}
+
+#tv-wrapper {
+  z-index: 5;
+}
+
 /* ─── State classes applied to body ─────────────────────────── */
 
 /* TV on: enable all buttons */
@@ -212,6 +241,12 @@ body.tv-mode #tv-on-overlay { display: block; }
 </style>
 </head>
 <body>
+
+<!-- Lights-off dark background overlay -->
+<div id="room-dark"></div>
+
+<!-- Light switch easter egg hotspot (invisible clickable area) -->
+<div id="switch-control" onclick="toggleLights()"></div>
 
 <div id="tv-wrapper">
 
@@ -389,6 +424,38 @@ function pickRandom(arr) {
 function ytURL(embedSrc) {
   const sep = embedSrc.includes('?') ? '&' : '?';
   return embedSrc + sep + 'autoplay=1';
+}
+
+// ─── Light switch easter egg ─────────────────────────────────────
+let lightsOn = true;
+
+function playLightSwitch() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const dur  = 0.035;
+    const buf  = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate * dur), audioCtx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const src    = audioCtx.createBufferSource();
+    src.buffer   = buf;
+    const filter = audioCtx.createBiquadFilter();
+    filter.type  = 'bandpass';
+    filter.frequency.value = 4000;
+    filter.Q.value = 1;
+    const gain   = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioCtx.destination);
+    src.start();
+  } catch (e) {}
+}
+
+function toggleLights() {
+  playLightSwitch();
+  lightsOn = !lightsOn;
+  document.body.classList.toggle('lights-off', !lightsOn);
 }
 
 // ─── Tuning sound (Web Audio white noise) ────────────────────────
